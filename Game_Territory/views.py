@@ -14,10 +14,12 @@ from django.core.mail import send_mail
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.db.models import Sum
+from . import analytics
 import random
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import update_session_auth_hash
 from django.http import JsonResponse
+import json
 
 @login_required
 def personal_info(request):
@@ -181,6 +183,36 @@ def order_statistics(request):
     buffer.seek(0)
 
     return HttpResponse(buffer, content_type='image/png')
+
+
+@login_required
+def analytics_dashboard(request):
+    """Display simple analytics charts for managers and admins."""
+    is_admin = request.user.is_superuser
+    is_manager = request.user.groups.filter(name='manager').exists()
+    if not is_admin and not is_manager:
+        return redirect('Game_Territory:profile')
+
+    status_counts = analytics.order_status_counts()
+    revenue = analytics.total_revenue()
+    top = analytics.top_products()
+
+    status_labels = [item['status'] for item in status_counts]
+    status_data = [item['count'] for item in status_counts]
+    product_labels = [item['product__name'] for item in top]
+    product_data = [item['quantity'] for item in top]
+
+    return render(
+        request,
+        'Game_Territory/analytics_dashboard.html',
+        {
+            'status_labels': json.dumps(status_labels, ensure_ascii=False),
+            'status_data': json.dumps(status_data),
+            'product_labels': json.dumps(product_labels, ensure_ascii=False),
+            'product_data': json.dumps(product_data),
+            'total_revenue': revenue,
+        },
+    )
 
 # def add_to_cart(request, product_id):
 #     product = get_object_or_404(Product, id=product_id)
